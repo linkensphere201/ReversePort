@@ -414,6 +414,13 @@ function stopProxy(): void {
 }
 
 export function activate(context: vscode.ExtensionContext): void {
+  if (vscode.env.remoteName) {
+    void vscode.window.showWarningMessage(
+      `Reverse proxy extension only runs locally. Current remote: ${vscode.env.remoteName}`
+    );
+    return;
+  }
+
   extensionContextRef = context;
   outputChannel = vscode.window.createOutputChannel('Reverse Proxy');
   statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);

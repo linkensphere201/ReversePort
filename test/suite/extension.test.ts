@@ -91,6 +91,15 @@ suite('Reverse Proxy Extension Integration Tests', () => {
     assert.ok(commands.includes('reverseProxy.openPanel'));
   });
 
+  test('manifest should restrict extensionKind to ui', () => {
+    const packageJsonPath = path.resolve(__dirname, '../../package.json');
+    const manifest = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8')) as {
+      extensionKind?: string[];
+    };
+    assert.ok(Array.isArray(manifest.extensionKind), 'extensionKind should be an array');
+    assert.deepStrictEqual(manifest.extensionKind, ['ui']);
+  });
+
   test('start command should show error when ssh does not exist', async () => {
     let capturedError = '';
     const originalShowErrorMessage = win.showErrorMessage;

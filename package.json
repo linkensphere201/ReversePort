@@ -10,6 +10,9 @@
   "categories": [
     "Other"
   ],
+  "extensionKind": [
+    "ui"
+  ],
   "activationEvents": [
     "onCommand:reverseProxy.start",
     "onCommand:reverseProxy.stop",
