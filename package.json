@@ -16,7 +16,7 @@
   "activationEvents": [
     "onCommand:reverseProxy.start",
     "onCommand:reverseProxy.stop",
-    "onCommand:reverseProxy.openPanel"
+    "onCommand:reverseProxy.toggle"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -30,8 +30,8 @@
         "title": "Reverse Proxy: Stop"
       },
       {
-        "command": "reverseProxy.openPanel",
-        "title": "Reverse Proxy: Open Panel"
+        "command": "reverseProxy.toggle",
+        "title": "Reverse Proxy: Toggle"
       }
     ],
     "configuration": {

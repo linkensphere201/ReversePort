@@ -6,7 +6,6 @@ import { ChildProcessWithoutNullStreams, spawn } from 'child_process';
 let sshProcess: ChildProcessWithoutNullStreams | null = null;
 let outputChannel: vscode.OutputChannel;
 let statusBarItem: vscode.StatusBarItem;
-let panel: vscode.WebviewPanel | undefined;
 let connectTimer: NodeJS.Timeout | null = null;
 let stopRequested = false;
 let extensionContextRef: vscode.ExtensionContext | null = null;
@@ -30,131 +29,26 @@ type RuntimeProxyConfig = FileProxyConfig & {
   loadedConfigPath: string;
 };
 
-function getStateLabel(state: ProxyState): string {
-  if (state === 'starting') {
-    return 'Starting';
-  }
-  if (state === 'connected') {
-    return 'Connected';
-  }
-  if (state === 'failed') {
-    return 'Failed';
-  }
-  return 'Stopped';
-}
-
-function postPanelState(): void {
-  if (panel) {
-    void panel.webview.postMessage({
-      type: 'state',
-      state: proxyState,
-      label: getStateLabel(proxyState)
-    });
-  }
-}
-
 function setProxyState(state: ProxyState): void {
   proxyState = state;
 
   if (state === 'starting') {
     statusBarItem.text = '$(sync~spin) Proxy: Starting';
-    statusBarItem.tooltip = 'SSH reverse proxy is starting';
+    statusBarItem.tooltip = 'SSH reverse proxy is starting. Click to stop.';
+    statusBarItem.command = 'reverseProxy.toggle';
   } else if (state === 'connected') {
     statusBarItem.text = '$(check) Proxy: Connected';
-    statusBarItem.tooltip = 'SSH reverse proxy is connected';
+    statusBarItem.tooltip = 'SSH reverse proxy is connected. Click to stop.';
+    statusBarItem.command = 'reverseProxy.toggle';
   } else if (state === 'failed') {
     statusBarItem.text = '$(error) Proxy: Failed';
-    statusBarItem.tooltip = 'SSH reverse proxy failed';
+    statusBarItem.tooltip = 'SSH reverse proxy failed. Click to start.';
+    statusBarItem.command = 'reverseProxy.toggle';
   } else {
     statusBarItem.text = '$(debug-disconnect) Proxy: Stopped';
-    statusBarItem.tooltip = 'SSH reverse proxy is stopped';
+    statusBarItem.tooltip = 'SSH reverse proxy is stopped. Click to start.';
+    statusBarItem.command = 'reverseProxy.toggle';
   }
-
-  postPanelState();
-}
-
-function getPanelHtml(webview: vscode.Webview): string {
-  const nonce = String(Date.now());
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource}; script-src 'nonce-${nonce}';">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <style>
-    body { font-family: var(--vscode-font-family); padding: 16px; color: var(--vscode-foreground); }
-    .card { border: 1px solid var(--vscode-input-border); border-radius: 8px; padding: 12px; }
-    .state { font-size: 16px; font-weight: 600; margin-bottom: 12px; }
-    .row { display: flex; gap: 8px; }
-    button { padding: 6px 12px; border: 1px solid var(--vscode-button-border, transparent); border-radius: 4px; cursor: pointer; }
-    .start { background: var(--vscode-button-background); color: var(--vscode-button-foreground); }
-    .stop { background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); }
-    .logs { background: transparent; color: var(--vscode-textLink-foreground); border-color: var(--vscode-textLink-foreground); }
-  </style>
-</head>
-<body>
-  <div class="card">
-    <div id="state" class="state">Status: ${getStateLabel(proxyState)}</div>
-    <div class="row">
-      <button class="start" id="start">Start</button>
-      <button class="stop" id="stop">Stop</button>
-      <button class="logs" id="logs">Open Logs</button>
-    </div>
-  </div>
-  <script nonce="${nonce}">
-    const vscode = acquireVsCodeApi();
-    const stateEl = document.getElementById('state');
-    document.getElementById('start').addEventListener('click', () => vscode.postMessage({ type: 'start' }));
-    document.getElementById('stop').addEventListener('click', () => vscode.postMessage({ type: 'stop' }));
-    document.getElementById('logs').addEventListener('click', () => vscode.postMessage({ type: 'logs' }));
-    window.addEventListener('message', (event) => {
-      const msg = event.data;
-      if (msg && msg.type === 'state') {
-        stateEl.textContent = 'Status: ' + msg.label;
-      }
-    });
-  </script>
-</body>
-</html>`;
-}
-
-function openPanel(context: vscode.ExtensionContext): void {
-  if (panel) {
-    panel.reveal(vscode.ViewColumn.One);
-    postPanelState();
-    return;
-  }
-
-  panel = vscode.window.createWebviewPanel(
-    'reverseProxy.panel',
-    'Reverse Proxy',
-    vscode.ViewColumn.One,
-    { enableScripts: true, retainContextWhenHidden: true }
-  );
-
-  panel.webview.html = getPanelHtml(panel.webview);
-  postPanelState();
-
-  panel.webview.onDidReceiveMessage(async (message) => {
-    if (!message || typeof message.type !== 'string') {
-      return;
-    }
-    if (message.type === 'start') {
-      await startProxy();
-      return;
-    }
-    if (message.type === 'stop') {
-      stopProxy();
-      return;
-    }
-    if (message.type === 'logs') {
-      outputChannel.show(true);
-    }
-  }, undefined, context.subscriptions);
-
-  panel.onDidDispose(() => {
-    panel = undefined;
-  }, undefined, context.subscriptions);
 }
 
 function assertString(value: unknown, key: string): string {
@@ -413,6 +307,14 @@ function stopProxy(): void {
   vscode.window.showInformationMessage('Reverse proxy stopping...');
 }
 
+async function toggleProxy(): Promise<void> {
+  if (sshProcess || proxyState === 'starting' || proxyState === 'connected') {
+    stopProxy();
+    return;
+  }
+  await startProxy();
+}
+
 export function activate(context: vscode.ExtensionContext): void {
   if (vscode.env.remoteName) {
     void vscode.window.showWarningMessage(
@@ -424,7 +326,6 @@ export function activate(context: vscode.ExtensionContext): void {
   extensionContextRef = context;
   outputChannel = vscode.window.createOutputChannel('Reverse Proxy');
   statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
-  statusBarItem.command = 'reverseProxy.openPanel';
   setProxyState('stopped');
   statusBarItem.show();
 
@@ -443,17 +344,13 @@ export function activate(context: vscode.ExtensionContext): void {
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('reverseProxy.openPanel', () => {
-      openPanel(context);
+    vscode.commands.registerCommand('reverseProxy.toggle', async () => {
+      await toggleProxy();
     })
   );
 }
 
 export function deactivate(): void {
-  if (panel) {
-    panel.dispose();
-    panel = undefined;
-  }
   if (connectTimer) {
     clearTimeout(connectTimer);
     connectTimer = null;

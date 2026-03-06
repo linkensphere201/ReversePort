@@ -6,7 +6,7 @@ This extension starts/stops an SSH reverse proxy from VSCode.
 
 - `Reverse Proxy: Start`
 - `Reverse Proxy: Stop`
-- `Reverse Proxy: Open Panel`
+- `Reverse Proxy: Toggle`
 
 ## Default behavior
 
@@ -48,7 +48,7 @@ The status bar now reports:
 - `Proxy: Failed`
 - `Proxy: Stopped`
 
-Click the status bar item or run `Reverse Proxy: Open Panel` to use a simple UI with Start/Stop buttons.
+Click the status bar item to toggle Start/Stop directly.
 
 If remote bind port is occupied, the extension reports a clear error (instead of only raw SSH warning logs).
 

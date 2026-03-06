@@ -88,7 +88,7 @@ suite('Reverse Proxy Extension Integration Tests', () => {
     const commands = await vscode.commands.getCommands(true);
     assert.ok(commands.includes('reverseProxy.start'));
     assert.ok(commands.includes('reverseProxy.stop'));
-    assert.ok(commands.includes('reverseProxy.openPanel'));
+    assert.ok(commands.includes('reverseProxy.toggle'));
   });
 
   test('manifest should restrict extensionKind to ui', () => {
