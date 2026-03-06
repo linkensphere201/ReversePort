@@ -1,0 +1,9 @@
+{
+  "remoteHost": "10.99.0.1",
+  "remotePort": 4001,
+  "remoteUser": "yangweijian",
+  "remoteBindPort": 17897,
+  "localHost": "127.0.0.1",
+  "localPort": 7897,
+  "identityFile": ""
+}
