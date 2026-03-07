@@ -15,6 +15,8 @@ type ProxyState = 'stopped' | 'starting' | 'connected' | 'failed';
 let proxyState: ProxyState = 'stopped';
 
 type FileProxyConfig = {
+  sshPath: string;
+  connectionReadyDelayMs: number;
   remoteHost: string;
   remotePort: number;
   remoteUser: string;
@@ -25,8 +27,6 @@ type FileProxyConfig = {
 };
 
 type RuntimeProxyConfig = FileProxyConfig & {
-  sshPath: string;
-  connectionReadyDelayMs: number;
   loadedConfigPath: string;
 };
 
@@ -79,7 +79,11 @@ class ProxySidebarProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
 
   private buildItems(): vscode.TreeItem[] {
     const toggle = new vscode.TreeItem(
-      proxyState === 'connected' ? 'Proxy: ON' : proxyState === 'starting' ? 'Proxy: CONNECTING...' : 'Proxy: OFF',
+      proxyState === 'connected'
+        ? 'ReverseTun: ON'
+        : proxyState === 'starting'
+          ? 'ReverseTun: CONNECTING...'
+          : 'ReverseTun: OFF',
       vscode.TreeItemCollapsibleState.None
     );
 
@@ -177,8 +181,14 @@ function loadFileProxyConfig(filePath: string): FileProxyConfig {
 
   const data = raw as Record<string, unknown>;
   const identityFile = typeof data.identityFile === 'string' ? data.identityFile.trim() : '';
+  const connectionReadyDelayMs = assertNumber(data.connectionReadyDelayMs, 'connectionReadyDelayMs');
+  if (connectionReadyDelayMs <= 0) {
+    throw new Error(`Invalid config field 'connectionReadyDelayMs': expected > 0.`);
+  }
 
   return {
+    sshPath: assertString(data.sshPath, 'sshPath'),
+    connectionReadyDelayMs,
     remoteHost: assertString(data.remoteHost, 'remoteHost'),
     remotePort: assertNumber(data.remotePort, 'remotePort'),
     remoteUser: assertString(data.remoteUser, 'remoteUser'),
@@ -197,8 +207,6 @@ function getConfig(): RuntimeProxyConfig {
 
   return {
     ...fileConfig,
-    sshPath: config.get<string>('sshPath', 'ssh'),
-    connectionReadyDelayMs: config.get<number>('connectionReadyDelayMs', 1200),
     loadedConfigPath: configPath
   };
 }
@@ -257,7 +265,7 @@ async function startProxy(): Promise<void> {
     outputChannel.appendLine(`[error] ${message}`);
     setProxyState('failed');
     vscode.window.showErrorMessage(
-      `SSH command is unavailable. Install OpenSSH or set reverseProxy.sshPath. Details: ${message}`
+      `SSH command is unavailable. Install OpenSSH or update 'sshPath' in reverse-proxy.config.json. Details: ${message}`
     );
     return;
   }

@@ -1,4 +1,6 @@
 {
+  "sshPath": "ssh",
+  "connectionReadyDelayMs": 1200,
   "remoteHost": "10.99.0.1",
   "remotePort": 4001,
   "remoteUser": "yangweijian",

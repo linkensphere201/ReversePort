@@ -18,16 +18,16 @@ ssh -N -R 17897:127.0.0.1:7897 FOO_USER@FOO_ADDRESS -p 4001
 
 ## Settings
 
-- `reverseProxy.sshPath` (default: `ssh`)
 - `reverseProxy.configFile` (default: `reverse-proxy.config.json`)
-- `reverseProxy.connectionReadyDelayMs` (default: `1200`)
 
-Tunnel target values are loaded from the JSON config file instead of extension code.
+All runtime values are loaded from the JSON config file instead of extension settings.
 
 Example `reverse-proxy.config.json`:
 
 ```json
 {
+  "sshPath": "ssh",
+  "connectionReadyDelayMs": 1200,
   "remoteHost": "FOO_ADDRESS",
   "remotePort": 4001,
   "remoteUser": "FOO_USER",
@@ -51,9 +51,9 @@ The status bar now reports:
 Click the status bar item to show current proxy status.
 
 The Activity Bar has a `Proxy` icon. Open it to use a single toggle button:
-- `Proxy: OFF` -> click to start
-- `Proxy: ON` -> click to stop
-- `Proxy: CONNECTING...` -> transitional state while connecting
+- `ReverseTun: OFF` -> click to start
+- `ReverseTun: ON` -> click to stop
+- `ReverseTun: CONNECTING...` -> transitional state while connecting
 - `Open Logs` -> open extension output logs
 
 If remote bind port is occupied, the extension reports a clear error (instead of only raw SSH warning logs).

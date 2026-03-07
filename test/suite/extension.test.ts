@@ -14,15 +14,18 @@ suite('Reverse Proxy Extension Integration Tests', () => {
   let fakeSshPath = '';
   let testDir = '';
   let testConfigFilePath = '';
-  let originalSshPath = 'ssh';
   let originalConfigFile = 'reverse-proxy.config.json';
-  let originalConnectionReadyDelayMs = 1200;
 
-  const writeProxyConfig = (remoteBindPort: number): void => {
+  const writeProxyConfig = (
+    remoteBindPort: number,
+    options?: { sshPath?: string; connectionReadyDelayMs?: number }
+  ): void => {
     fs.writeFileSync(
       testConfigFilePath,
       JSON.stringify(
         {
+          sshPath: options?.sshPath ?? 'ssh',
+          connectionReadyDelayMs: options?.connectionReadyDelayMs ?? 1200,
           remoteHost: '10.99.0.1',
           remotePort: 4001,
           remoteUser: 'yangweijian',
@@ -43,9 +46,7 @@ suite('Reverse Proxy Extension Integration Tests', () => {
     assert.ok(extension, 'Extension local.reverse-proxy-extension should be installed for tests');
     await extension!.activate();
 
-    originalSshPath = config.get<string>('sshPath', 'ssh');
     originalConfigFile = config.get<string>('configFile', 'reverse-proxy.config.json');
-    originalConnectionReadyDelayMs = config.get<number>('connectionReadyDelayMs', 1200);
 
     testDir = fs.mkdtempSync(path.join(os.tmpdir(), 'reverse-proxy-ext-test-'));
     testConfigFilePath = path.join(testDir, 'reverse-proxy.config.json');
@@ -76,9 +77,7 @@ suite('Reverse Proxy Extension Integration Tests', () => {
   });
 
   suiteTeardown(async () => {
-    await config.update('sshPath', originalSshPath, vscode.ConfigurationTarget.Global);
     await config.update('configFile', originalConfigFile, vscode.ConfigurationTarget.Global);
-    await config.update('connectionReadyDelayMs', originalConnectionReadyDelayMs, vscode.ConfigurationTarget.Global);
     delete process.env.RPX_FAKE_MODE;
     delete process.env.RPX_FAKE_BIND_PORT;
     await vscode.commands.executeCommand('reverseProxy.stop');
@@ -109,7 +108,7 @@ suite('Reverse Proxy Extension Integration Tests', () => {
     )) as Array<{ label: string; command?: string; enabled: boolean }>;
 
     assert.strictEqual(items.length, 2, `Expected two sidebar items, got ${items.length}`);
-    assert.strictEqual(items[0]?.label, 'Proxy: OFF');
+    assert.strictEqual(items[0]?.label, 'ReverseTun: OFF');
     assert.ok(items[0]?.enabled, 'OFF button should be clickable');
     assert.strictEqual(items[1]?.label, 'Open Logs');
     assert.ok(items[1]?.enabled, 'Open Logs should be clickable');
@@ -125,13 +124,11 @@ suite('Reverse Proxy Extension Integration Tests', () => {
     };
 
     try {
-      writeProxyConfig(29103);
+      writeProxyConfig(29103, { sshPath: fakeSshPath, connectionReadyDelayMs: 200 });
       process.env.RPX_FAKE_MODE = 'success';
       await config.update('configFile', testConfigFilePath, vscode.ConfigurationTarget.Global);
-      await config.update('sshPath', fakeSshPath, vscode.ConfigurationTarget.Global);
-      await config.update('connectionReadyDelayMs', 200, vscode.ConfigurationTarget.Global);
 
-      await vscode.commands.executeCommand('reverseProxy.test.clickSidebarItem', 'Proxy: OFF');
+      await vscode.commands.executeCommand('reverseProxy.test.clickSidebarItem', 'ReverseTun: OFF');
       await new Promise((resolve) => setTimeout(resolve, 700));
       assert.ok(
         infos.some((m) => m.includes('Reverse proxy connected.')),
@@ -142,17 +139,17 @@ suite('Reverse Proxy Extension Integration Tests', () => {
         'reverseProxy.test.getSidebarItems'
       )) as Array<{ label: string; command?: string; enabled: boolean }>;
       assert.strictEqual(itemsAfterStart.length, 2);
-      assert.strictEqual(itemsAfterStart[0]?.label, 'Proxy: ON');
+      assert.strictEqual(itemsAfterStart[0]?.label, 'ReverseTun: ON');
       assert.ok(itemsAfterStart[0]?.enabled, 'ON button should be clickable');
       assert.strictEqual(itemsAfterStart[1]?.label, 'Open Logs');
 
-      await vscode.commands.executeCommand('reverseProxy.test.clickSidebarItem', 'Proxy: ON');
+      await vscode.commands.executeCommand('reverseProxy.test.clickSidebarItem', 'ReverseTun: ON');
       await new Promise((resolve) => setTimeout(resolve, 350));
       const itemsAfterStop = (await vscode.commands.executeCommand(
         'reverseProxy.test.getSidebarItems'
       )) as Array<{ label: string; command?: string; enabled: boolean }>;
       assert.strictEqual(itemsAfterStop.length, 2);
-      assert.strictEqual(itemsAfterStop[0]?.label, 'Proxy: OFF');
+      assert.strictEqual(itemsAfterStop[0]?.label, 'ReverseTun: OFF');
       assert.ok(itemsAfterStop[0]?.enabled, 'OFF button should be clickable after stop');
       assert.strictEqual(itemsAfterStop[1]?.label, 'Open Logs');
     } finally {
@@ -172,8 +169,8 @@ suite('Reverse Proxy Extension Integration Tests', () => {
     };
 
     try {
+      writeProxyConfig(17897, { sshPath: '__definitely_missing_ssh_binary__', connectionReadyDelayMs: 200 });
       await config.update('configFile', testConfigFilePath, vscode.ConfigurationTarget.Global);
-      await config.update('sshPath', '__definitely_missing_ssh_binary__', vscode.ConfigurationTarget.Global);
       await vscode.commands.executeCommand('reverseProxy.start');
 
       assert.ok(
@@ -181,7 +178,6 @@ suite('Reverse Proxy Extension Integration Tests', () => {
         `Expected SSH unavailable error message, got: ${capturedError}`
       );
     } finally {
-      await config.update('sshPath', originalSshPath, vscode.ConfigurationTarget.Global);
       win.showErrorMessage = originalShowErrorMessage;
       await vscode.commands.executeCommand('reverseProxy.stop');
     }
@@ -248,12 +244,10 @@ suite('Reverse Proxy Extension Integration Tests', () => {
     };
 
     try {
-      writeProxyConfig(occupiedPort);
+      writeProxyConfig(occupiedPort, { sshPath: fakeSshPath, connectionReadyDelayMs: 200 });
       process.env.RPX_FAKE_MODE = 'port_busy';
       process.env.RPX_FAKE_BIND_PORT = String(occupiedPort);
       await config.update('configFile', testConfigFilePath, vscode.ConfigurationTarget.Global);
-      await config.update('sshPath', fakeSshPath, vscode.ConfigurationTarget.Global);
-      await config.update('connectionReadyDelayMs', 200, vscode.ConfigurationTarget.Global);
 
       await vscode.commands.executeCommand('reverseProxy.start');
       await new Promise((resolve) => setTimeout(resolve, 800));
@@ -280,11 +274,9 @@ suite('Reverse Proxy Extension Integration Tests', () => {
     };
 
     try {
-      writeProxyConfig(29002);
+      writeProxyConfig(29002, { sshPath: fakeSshPath, connectionReadyDelayMs: 200 });
       process.env.RPX_FAKE_MODE = 'success';
       await config.update('configFile', testConfigFilePath, vscode.ConfigurationTarget.Global);
-      await config.update('sshPath', fakeSshPath, vscode.ConfigurationTarget.Global);
-      await config.update('connectionReadyDelayMs', 200, vscode.ConfigurationTarget.Global);
 
       await vscode.commands.executeCommand('reverseProxy.start');
       await new Promise((resolve) => setTimeout(resolve, 700));

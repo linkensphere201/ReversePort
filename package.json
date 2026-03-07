@@ -65,21 +65,10 @@
     "configuration": {
       "title": "Reverse Proxy",
       "properties": {
-        "reverseProxy.sshPath": {
-          "type": "string",
-          "default": "ssh",
-          "description": "Path to ssh executable."
-        },
         "reverseProxy.configFile": {
           "type": "string",
           "default": "reverse-proxy.config.json",
           "description": "Path to reverse proxy config JSON file. Relative path resolves from workspace root."
-        },
-        "reverseProxy.connectionReadyDelayMs": {
-          "type": "number",
-          "default": 1200,
-          "minimum": 100,
-          "description": "Delay in milliseconds before considering the tunnel connected."
         }
       }
     }
