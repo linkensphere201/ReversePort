@@ -17,8 +17,8 @@
     "onCommand:reverseProxy.start",
     "onCommand:reverseProxy.stop",
     "onCommand:reverseProxy.showStatus",
-    "onCommand:reverseProxy.restart",
     "onCommand:reverseProxy.showLogs",
+    "onCommand:reverseProxy.sidebarToggle",
     "onView:reverseProxy.sidebarView"
   ],
   "main": "./out/extension.js",
@@ -37,12 +37,12 @@
         "title": "Reverse Proxy: Show Status"
       },
       {
-        "command": "reverseProxy.restart",
-        "title": "Reverse Proxy: Restart"
-      },
-      {
         "command": "reverseProxy.showLogs",
         "title": "Reverse Proxy: Show Logs"
+      },
+      {
+        "command": "reverseProxy.sidebarToggle",
+        "title": "Reverse Proxy: Toggle From Sidebar"
       }
     ],
     "viewsContainers": {

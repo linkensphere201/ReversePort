@@ -78,40 +78,29 @@ class ProxySidebarProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
   }
 
   private buildItems(): vscode.TreeItem[] {
-    const status = new vscode.TreeItem(
-      `Status: ${getStateLabel(proxyState)}`,
+    const toggle = new vscode.TreeItem(
+      proxyState === 'connected' ? 'Proxy: ON' : proxyState === 'starting' ? 'Proxy: CONNECTING...' : 'Proxy: OFF',
       vscode.TreeItemCollapsibleState.None
     );
-    status.iconPath = new vscode.ThemeIcon('pulse');
-
-    const canStart = !(sshProcess || proxyState === 'starting' || proxyState === 'connected');
-    const canStop = !!(sshProcess || proxyState === 'starting' || proxyState === 'connected');
-
-    const start = new vscode.TreeItem('Start', vscode.TreeItemCollapsibleState.None);
-    start.iconPath = new vscode.ThemeIcon('play');
-    if (canStart) {
-      start.command = { command: 'reverseProxy.start', title: 'Start' };
-    } else {
-      start.description = 'Unavailable';
-    }
-
-    const stop = new vscode.TreeItem('Stop', vscode.TreeItemCollapsibleState.None);
-    stop.iconPath = new vscode.ThemeIcon('debug-stop');
-    if (canStop) {
-      stop.command = { command: 'reverseProxy.stop', title: 'Stop' };
-    } else {
-      stop.description = 'Unavailable';
-    }
-
-    const restart = new vscode.TreeItem('Restart', vscode.TreeItemCollapsibleState.None);
-    restart.iconPath = new vscode.ThemeIcon('refresh');
-    restart.command = { command: 'reverseProxy.restart', title: 'Restart' };
 
     const logs = new vscode.TreeItem('Open Logs', vscode.TreeItemCollapsibleState.None);
     logs.iconPath = new vscode.ThemeIcon('output');
     logs.command = { command: 'reverseProxy.showLogs', title: 'Open Logs' };
 
-    return [status, start, stop, restart, logs];
+    if (proxyState === 'connected') {
+      toggle.iconPath = new vscode.ThemeIcon('circle-filled', new vscode.ThemeColor('charts.green'));
+      toggle.command = { command: 'reverseProxy.sidebarToggle', title: 'Toggle Proxy' };
+      return [toggle, logs];
+    }
+
+    if (proxyState === 'starting') {
+      toggle.iconPath = new vscode.ThemeIcon('sync~spin');
+      return [toggle, logs];
+    }
+
+    toggle.iconPath = new vscode.ThemeIcon('circle-large-outline', new vscode.ThemeColor('disabledForeground'));
+    toggle.command = { command: 'reverseProxy.sidebarToggle', title: 'Toggle Proxy' };
+    return [toggle, logs];
   }
 }
 
@@ -391,11 +380,16 @@ function stopProxy(): void {
   vscode.window.showInformationMessage('Reverse proxy stopping...');
 }
 
-async function restartProxy(): Promise<void> {
-  if (sshProcess || proxyState === 'starting' || proxyState === 'connected') {
-    stopProxy();
-    await new Promise((resolve) => setTimeout(resolve, 200));
+async function toggleProxyFromSidebar(): Promise<void> {
+  if (proxyState === 'starting') {
+    return;
   }
+
+  if (proxyState === 'connected' || sshProcess) {
+    stopProxy();
+    return;
+  }
+
   await startProxy();
 }
 
@@ -448,8 +442,8 @@ export function activate(context: vscode.ExtensionContext): void {
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('reverseProxy.restart', async () => {
-      await restartProxy();
+    vscode.commands.registerCommand('reverseProxy.sidebarToggle', async () => {
+      await toggleProxyFromSidebar();
     })
   );
 

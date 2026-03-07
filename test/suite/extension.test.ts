@@ -89,8 +89,8 @@ suite('Reverse Proxy Extension Integration Tests', () => {
     assert.ok(commands.includes('reverseProxy.start'));
     assert.ok(commands.includes('reverseProxy.stop'));
     assert.ok(commands.includes('reverseProxy.showStatus'));
-    assert.ok(commands.includes('reverseProxy.restart'));
     assert.ok(commands.includes('reverseProxy.showLogs'));
+    assert.ok(commands.includes('reverseProxy.sidebarToggle'));
   });
 
   test('manifest should restrict extensionKind to ui', () => {
@@ -102,26 +102,20 @@ suite('Reverse Proxy Extension Integration Tests', () => {
     assert.deepStrictEqual(manifest.extensionKind, ['ui']);
   });
 
-  test('sidebar should expose status and action items', async () => {
+  test('sidebar should expose OFF toggle and Open Logs when proxy is stopped', async () => {
     await vscode.commands.executeCommand('reverseProxy.stop');
     const items = (await vscode.commands.executeCommand(
       'reverseProxy.test.getSidebarItems'
     )) as Array<{ label: string; command?: string; enabled: boolean }>;
 
-    const labels = items.map((x) => x.label);
-    assert.ok(labels.some((x) => x.startsWith('Status: ')));
-    assert.ok(labels.includes('Start'));
-    assert.ok(labels.includes('Stop'));
-    assert.ok(labels.includes('Restart'));
-    assert.ok(labels.includes('Open Logs'));
-
-    const start = items.find((x) => x.label === 'Start');
-    const stop = items.find((x) => x.label === 'Stop');
-    assert.ok(start?.enabled, 'Start should be enabled when proxy is stopped');
-    assert.ok(!stop?.enabled, 'Stop should be disabled when proxy is stopped');
+    assert.strictEqual(items.length, 2, `Expected two sidebar items, got ${items.length}`);
+    assert.strictEqual(items[0]?.label, 'Proxy: OFF');
+    assert.ok(items[0]?.enabled, 'OFF button should be clickable');
+    assert.strictEqual(items[1]?.label, 'Open Logs');
+    assert.ok(items[1]?.enabled, 'Open Logs should be clickable');
   });
 
-  test('sidebar Start/Restart/Stop actions should work end-to-end', async () => {
+  test('sidebar single toggle should switch OFF -> ON -> OFF end-to-end', async () => {
     const infos: string[] = [];
     const originalShowInformationMessage = win.showInformationMessage;
 
@@ -137,29 +131,30 @@ suite('Reverse Proxy Extension Integration Tests', () => {
       await config.update('sshPath', fakeSshPath, vscode.ConfigurationTarget.Global);
       await config.update('connectionReadyDelayMs', 200, vscode.ConfigurationTarget.Global);
 
-      await vscode.commands.executeCommand('reverseProxy.test.clickSidebarItem', 'Start');
+      await vscode.commands.executeCommand('reverseProxy.test.clickSidebarItem', 'Proxy: OFF');
       await new Promise((resolve) => setTimeout(resolve, 700));
       assert.ok(
         infos.some((m) => m.includes('Reverse proxy connected.')),
-        `Expected connected message after sidebar Start, got: ${infos.join(' | ')}`
+        `Expected connected message after OFF click, got: ${infos.join(' | ')}`
       );
 
-      await vscode.commands.executeCommand('reverseProxy.test.clickSidebarItem', 'Restart');
-      await new Promise((resolve) => setTimeout(resolve, 900));
-
-      const itemsAfterRestart = (await vscode.commands.executeCommand(
+      const itemsAfterStart = (await vscode.commands.executeCommand(
         'reverseProxy.test.getSidebarItems'
       )) as Array<{ label: string; command?: string; enabled: boolean }>;
-      const stop = itemsAfterRestart.find((x) => x.label === 'Stop');
-      assert.ok(stop?.enabled, 'Stop should be enabled after sidebar Restart');
+      assert.strictEqual(itemsAfterStart.length, 2);
+      assert.strictEqual(itemsAfterStart[0]?.label, 'Proxy: ON');
+      assert.ok(itemsAfterStart[0]?.enabled, 'ON button should be clickable');
+      assert.strictEqual(itemsAfterStart[1]?.label, 'Open Logs');
 
-      await vscode.commands.executeCommand('reverseProxy.test.clickSidebarItem', 'Stop');
-      await new Promise((resolve) => setTimeout(resolve, 200));
+      await vscode.commands.executeCommand('reverseProxy.test.clickSidebarItem', 'Proxy: ON');
+      await new Promise((resolve) => setTimeout(resolve, 350));
       const itemsAfterStop = (await vscode.commands.executeCommand(
         'reverseProxy.test.getSidebarItems'
       )) as Array<{ label: string; command?: string; enabled: boolean }>;
-      const start = itemsAfterStop.find((x) => x.label === 'Start');
-      assert.ok(start?.enabled, 'Start should be enabled after sidebar Stop');
+      assert.strictEqual(itemsAfterStop.length, 2);
+      assert.strictEqual(itemsAfterStop[0]?.label, 'Proxy: OFF');
+      assert.ok(itemsAfterStop[0]?.enabled, 'OFF button should be clickable after stop');
+      assert.strictEqual(itemsAfterStop[1]?.label, 'Open Logs');
     } finally {
       win.showInformationMessage = originalShowInformationMessage;
       delete process.env.RPX_FAKE_MODE;
