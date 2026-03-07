@@ -16,7 +16,10 @@
   "activationEvents": [
     "onCommand:reverseProxy.start",
     "onCommand:reverseProxy.stop",
-    "onCommand:reverseProxy.toggle"
+    "onCommand:reverseProxy.showStatus",
+    "onCommand:reverseProxy.restart",
+    "onCommand:reverseProxy.showLogs",
+    "onView:reverseProxy.sidebarView"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -30,10 +33,35 @@
         "title": "Reverse Proxy: Stop"
       },
       {
-        "command": "reverseProxy.toggle",
-        "title": "Reverse Proxy: Toggle"
+        "command": "reverseProxy.showStatus",
+        "title": "Reverse Proxy: Show Status"
+      },
+      {
+        "command": "reverseProxy.restart",
+        "title": "Reverse Proxy: Restart"
+      },
+      {
+        "command": "reverseProxy.showLogs",
+        "title": "Reverse Proxy: Show Logs"
       }
     ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "reverseProxy",
+          "title": "Proxy",
+          "icon": "media/proxy.svg"
+        }
+      ]
+    },
+    "views": {
+      "reverseProxy": [
+        {
+          "id": "reverseProxy.sidebarView",
+          "name": "Proxy Status"
+        }
+      ]
+    },
     "configuration": {
       "title": "Reverse Proxy",
       "properties": {

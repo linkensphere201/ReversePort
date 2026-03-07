@@ -9,6 +9,7 @@ let statusBarItem: vscode.StatusBarItem;
 let connectTimer: NodeJS.Timeout | null = null;
 let stopRequested = false;
 let extensionContextRef: vscode.ExtensionContext | null = null;
+let sidebarViewProvider: ProxySidebarProvider | null = null;
 
 type ProxyState = 'stopped' | 'starting' | 'connected' | 'failed';
 let proxyState: ProxyState = 'stopped';
@@ -29,26 +30,109 @@ type RuntimeProxyConfig = FileProxyConfig & {
   loadedConfigPath: string;
 };
 
+function getStateLabel(state: ProxyState): string {
+  if (state === 'starting') {
+    return 'Starting';
+  }
+  if (state === 'connected') {
+    return 'Connected';
+  }
+  if (state === 'failed') {
+    return 'Failed';
+  }
+  return 'Stopped';
+}
+
+class ProxySidebarProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
+  private readonly onDidChangeTreeDataEmitter = new vscode.EventEmitter<void>();
+  readonly onDidChangeTreeData = this.onDidChangeTreeDataEmitter.event;
+
+  refresh(): void {
+    this.onDidChangeTreeDataEmitter.fire();
+  }
+
+  getTreeItem(element: vscode.TreeItem): vscode.TreeItem {
+    return element;
+  }
+
+  getChildren(element?: vscode.TreeItem): vscode.ProviderResult<vscode.TreeItem[]> {
+    if (element) {
+      return [];
+    }
+
+    return this.buildItems();
+  }
+
+  getItemsForTest(): Array<{ label: string; command?: string; enabled: boolean }> {
+    return this.buildItems().map((item) => {
+      const command =
+        item.command && typeof item.command === 'object' && 'command' in item.command
+          ? item.command.command
+          : undefined;
+      return {
+        label: String(item.label ?? ''),
+        command,
+        enabled: Boolean(command)
+      };
+    });
+  }
+
+  private buildItems(): vscode.TreeItem[] {
+    const status = new vscode.TreeItem(
+      `Status: ${getStateLabel(proxyState)}`,
+      vscode.TreeItemCollapsibleState.None
+    );
+    status.iconPath = new vscode.ThemeIcon('pulse');
+
+    const canStart = !(sshProcess || proxyState === 'starting' || proxyState === 'connected');
+    const canStop = !!(sshProcess || proxyState === 'starting' || proxyState === 'connected');
+
+    const start = new vscode.TreeItem('Start', vscode.TreeItemCollapsibleState.None);
+    start.iconPath = new vscode.ThemeIcon('play');
+    if (canStart) {
+      start.command = { command: 'reverseProxy.start', title: 'Start' };
+    } else {
+      start.description = 'Unavailable';
+    }
+
+    const stop = new vscode.TreeItem('Stop', vscode.TreeItemCollapsibleState.None);
+    stop.iconPath = new vscode.ThemeIcon('debug-stop');
+    if (canStop) {
+      stop.command = { command: 'reverseProxy.stop', title: 'Stop' };
+    } else {
+      stop.description = 'Unavailable';
+    }
+
+    const restart = new vscode.TreeItem('Restart', vscode.TreeItemCollapsibleState.None);
+    restart.iconPath = new vscode.ThemeIcon('refresh');
+    restart.command = { command: 'reverseProxy.restart', title: 'Restart' };
+
+    const logs = new vscode.TreeItem('Open Logs', vscode.TreeItemCollapsibleState.None);
+    logs.iconPath = new vscode.ThemeIcon('output');
+    logs.command = { command: 'reverseProxy.showLogs', title: 'Open Logs' };
+
+    return [status, start, stop, restart, logs];
+  }
+}
+
 function setProxyState(state: ProxyState): void {
   proxyState = state;
 
   if (state === 'starting') {
     statusBarItem.text = '$(sync~spin) Proxy: Starting';
-    statusBarItem.tooltip = 'SSH reverse proxy is starting. Click to stop.';
-    statusBarItem.command = 'reverseProxy.toggle';
+    statusBarItem.tooltip = 'SSH reverse proxy is starting. Click to view status.';
   } else if (state === 'connected') {
     statusBarItem.text = '$(check) Proxy: Connected';
-    statusBarItem.tooltip = 'SSH reverse proxy is connected. Click to stop.';
-    statusBarItem.command = 'reverseProxy.toggle';
+    statusBarItem.tooltip = 'SSH reverse proxy is connected. Click to view status.';
   } else if (state === 'failed') {
     statusBarItem.text = '$(error) Proxy: Failed';
-    statusBarItem.tooltip = 'SSH reverse proxy failed. Click to start.';
-    statusBarItem.command = 'reverseProxy.toggle';
+    statusBarItem.tooltip = 'SSH reverse proxy failed. Click to view status.';
   } else {
     statusBarItem.text = '$(debug-disconnect) Proxy: Stopped';
-    statusBarItem.tooltip = 'SSH reverse proxy is stopped. Click to start.';
-    statusBarItem.command = 'reverseProxy.toggle';
+    statusBarItem.tooltip = 'SSH reverse proxy is stopped. Click to view status.';
   }
+
+  sidebarViewProvider?.refresh();
 }
 
 function assertString(value: unknown, key: string): string {
@@ -307,12 +391,20 @@ function stopProxy(): void {
   vscode.window.showInformationMessage('Reverse proxy stopping...');
 }
 
-async function toggleProxy(): Promise<void> {
+async function restartProxy(): Promise<void> {
   if (sshProcess || proxyState === 'starting' || proxyState === 'connected') {
     stopProxy();
-    return;
+    await new Promise((resolve) => setTimeout(resolve, 200));
   }
   await startProxy();
+}
+
+function showStatus(): void {
+  vscode.window.showInformationMessage(`Reverse proxy status: ${getStateLabel(proxyState)}`);
+}
+
+function showLogs(): void {
+  outputChannel.show(true);
 }
 
 export function activate(context: vscode.ExtensionContext): void {
@@ -326,10 +418,16 @@ export function activate(context: vscode.ExtensionContext): void {
   extensionContextRef = context;
   outputChannel = vscode.window.createOutputChannel('Reverse Proxy');
   statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
+  statusBarItem.command = 'reverseProxy.showStatus';
   setProxyState('stopped');
   statusBarItem.show();
+  sidebarViewProvider = new ProxySidebarProvider();
 
-  context.subscriptions.push(outputChannel, statusBarItem);
+  context.subscriptions.push(
+    outputChannel,
+    statusBarItem,
+    vscode.window.registerTreeDataProvider('reverseProxy.sidebarView', sidebarViewProvider)
+  );
 
   context.subscriptions.push(
     vscode.commands.registerCommand('reverseProxy.start', async () => {
@@ -344,13 +442,48 @@ export function activate(context: vscode.ExtensionContext): void {
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('reverseProxy.toggle', async () => {
-      await toggleProxy();
+    vscode.commands.registerCommand('reverseProxy.showStatus', () => {
+      showStatus();
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('reverseProxy.restart', async () => {
+      await restartProxy();
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('reverseProxy.showLogs', () => {
+      showLogs();
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('reverseProxy.test.getSidebarItems', () => {
+      if (!sidebarViewProvider) {
+        return [];
+      }
+      return sidebarViewProvider.getItemsForTest();
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('reverseProxy.test.clickSidebarItem', async (label: string) => {
+      if (!sidebarViewProvider) {
+        throw new Error('Sidebar provider is not initialized.');
+      }
+      const item = sidebarViewProvider.getItemsForTest().find((x) => x.label === label);
+      if (!item || !item.command || !item.enabled) {
+        throw new Error(`Sidebar item '${label}' is not clickable.`);
+      }
+      await vscode.commands.executeCommand(item.command);
     })
   );
 }
 
 export function deactivate(): void {
+  sidebarViewProvider = null;
   if (connectTimer) {
     clearTimeout(connectTimer);
     connectTimer = null;

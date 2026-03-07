@@ -1,0 +1,16 @@
+.git/**
+.github/**
+.vscode/**
+.vscode-test/**
+.npm-cache/**
+node_modules/**
+release-artifacts/**
+src/**
+test/**
+out/runTest.js
+out/runTest.js.map
+out/suite/**
+tsconfig.json
+tsconfig.test.json
+package-lock.json
+**/*.map
