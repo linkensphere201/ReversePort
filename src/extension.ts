@@ -116,16 +116,16 @@ function setProxyState(state: ProxyState): void {
   proxyState = state;
 
   if (state === 'starting') {
-    statusBarItem.text = '$(sync~spin) Proxy: Starting';
+    statusBarItem.text = '$(sync~spin) Starting';
     statusBarItem.tooltip = 'SSH reverse proxy is starting. Click to view status.';
   } else if (state === 'connected') {
-    statusBarItem.text = '$(check) Proxy: Connected';
+    statusBarItem.text = '$(check) Connected';
     statusBarItem.tooltip = 'SSH reverse proxy is connected. Click to view status.';
   } else if (state === 'failed') {
-    statusBarItem.text = '$(error) Proxy: Failed';
+    statusBarItem.text = '$(error) Failed';
     statusBarItem.tooltip = 'SSH reverse proxy failed. Click to view status.';
   } else {
-    statusBarItem.text = '$(debug-disconnect) Proxy: Stopped';
+    statusBarItem.text = '$(debug-disconnect) Stopped';
     statusBarItem.tooltip = 'SSH reverse proxy is stopped. Click to view status.';
   }
 

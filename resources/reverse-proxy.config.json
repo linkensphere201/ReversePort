@@ -1,9 +1,9 @@
 {
   "sshPath": "ssh",
   "connectionReadyDelayMs": 1200,
-  "remoteHost": "10.99.0.1",
+  "remoteHost": "FOO_ADDRESS",
   "remotePort": 4001,
-  "remoteUser": "yangweijian",
+  "remoteUser": "FOO_USER",
   "remoteBindPort": 17897,
   "localHost": "127.0.0.1",
   "localPort": 7897,

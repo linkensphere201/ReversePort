@@ -44,10 +44,10 @@ Example `reverse-proxy.config.json`:
 Before starting the tunnel, the extension checks whether `ssh` is executable. If not, it shows an error and does not start.
 
 The status bar now reports:
-- `Proxy: Starting`
-- `Proxy: Connected`
-- `Proxy: Failed`
-- `Proxy: Stopped`
+- `Starting`
+- `Connected`
+- `Failed`
+- `Stopped`
 
 Click the status bar item to show current proxy status.
 

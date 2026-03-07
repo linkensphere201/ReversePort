@@ -54,7 +54,7 @@
       "activitybar": [
         {
           "id": "reverseProxy",
-          "title": "Proxy",
+          "title": "ToolBox",
           "icon": "media/proxy.svg"
         }
       ]
