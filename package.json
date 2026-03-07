@@ -18,6 +18,7 @@
     "onCommand:reverseProxy.stop",
     "onCommand:reverseProxy.showStatus",
     "onCommand:reverseProxy.showLogs",
+    "onCommand:reverseProxy.openSettings",
     "onCommand:reverseProxy.sidebarToggle",
     "onView:reverseProxy.sidebarView"
   ],
@@ -41,6 +42,10 @@
         "title": "Reverse Proxy: Show Logs"
       },
       {
+        "command": "reverseProxy.openSettings",
+        "title": "Reverse Proxy: Settings"
+      },
+      {
         "command": "reverseProxy.sidebarToggle",
         "title": "Reverse Proxy: Toggle From Sidebar"
       }
@@ -58,7 +63,7 @@
       "reverseProxy": [
         {
           "id": "reverseProxy.sidebarView",
-          "name": "Proxy Status"
+          "name": "ToolBox Status"
         }
       ]
     },

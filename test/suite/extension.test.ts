@@ -89,6 +89,7 @@ suite('Reverse Proxy Extension Integration Tests', () => {
     assert.ok(commands.includes('reverseProxy.stop'));
     assert.ok(commands.includes('reverseProxy.showStatus'));
     assert.ok(commands.includes('reverseProxy.showLogs'));
+    assert.ok(commands.includes('reverseProxy.openSettings'));
     assert.ok(commands.includes('reverseProxy.sidebarToggle'));
   });
 
@@ -101,17 +102,19 @@ suite('Reverse Proxy Extension Integration Tests', () => {
     assert.deepStrictEqual(manifest.extensionKind, ['ui']);
   });
 
-  test('sidebar should expose OFF toggle and Open Logs when proxy is stopped', async () => {
+  test('sidebar should expose OFF toggle, Open Logs, and Settings when proxy is stopped', async () => {
     await vscode.commands.executeCommand('reverseProxy.stop');
     const items = (await vscode.commands.executeCommand(
       'reverseProxy.test.getSidebarItems'
     )) as Array<{ label: string; command?: string; enabled: boolean }>;
 
-    assert.strictEqual(items.length, 2, `Expected two sidebar items, got ${items.length}`);
+    assert.strictEqual(items.length, 3, `Expected three sidebar items, got ${items.length}`);
     assert.strictEqual(items[0]?.label, 'ReverseTun: OFF');
     assert.ok(items[0]?.enabled, 'OFF button should be clickable');
     assert.strictEqual(items[1]?.label, 'Open Logs');
     assert.ok(items[1]?.enabled, 'Open Logs should be clickable');
+    assert.strictEqual(items[2]?.label, 'Settings');
+    assert.ok(items[2]?.enabled, 'Settings should be clickable');
   });
 
   test('sidebar single toggle should switch OFF -> ON -> OFF end-to-end', async () => {
@@ -138,25 +141,52 @@ suite('Reverse Proxy Extension Integration Tests', () => {
       const itemsAfterStart = (await vscode.commands.executeCommand(
         'reverseProxy.test.getSidebarItems'
       )) as Array<{ label: string; command?: string; enabled: boolean }>;
-      assert.strictEqual(itemsAfterStart.length, 2);
+      assert.strictEqual(itemsAfterStart.length, 3);
       assert.strictEqual(itemsAfterStart[0]?.label, 'ReverseTun: ON');
       assert.ok(itemsAfterStart[0]?.enabled, 'ON button should be clickable');
       assert.strictEqual(itemsAfterStart[1]?.label, 'Open Logs');
+      assert.strictEqual(itemsAfterStart[2]?.label, 'Settings');
 
       await vscode.commands.executeCommand('reverseProxy.test.clickSidebarItem', 'ReverseTun: ON');
       await new Promise((resolve) => setTimeout(resolve, 350));
       const itemsAfterStop = (await vscode.commands.executeCommand(
         'reverseProxy.test.getSidebarItems'
       )) as Array<{ label: string; command?: string; enabled: boolean }>;
-      assert.strictEqual(itemsAfterStop.length, 2);
+      assert.strictEqual(itemsAfterStop.length, 3);
       assert.strictEqual(itemsAfterStop[0]?.label, 'ReverseTun: OFF');
       assert.ok(itemsAfterStop[0]?.enabled, 'OFF button should be clickable after stop');
       assert.strictEqual(itemsAfterStop[1]?.label, 'Open Logs');
+      assert.strictEqual(itemsAfterStop[2]?.label, 'Settings');
     } finally {
       win.showInformationMessage = originalShowInformationMessage;
       delete process.env.RPX_FAKE_MODE;
       await vscode.commands.executeCommand('reverseProxy.stop');
     }
+  });
+
+  test('settings helper should create configs.json and update configFile when target path is missing', async () => {
+    const missingRelative = 'definitely-missing-configs\\proxy-config.json';
+    await config.update('configFile', missingRelative, vscode.ConfigurationTarget.Global);
+
+    const selectedDir = path.join(testDir, 'settings-target');
+    fs.mkdirSync(selectedDir, { recursive: true });
+
+    const createdPath = (await vscode.commands.executeCommand(
+      'reverseProxy.test.openSettingsWithDirectory',
+      selectedDir
+    )) as string;
+
+    assert.strictEqual(createdPath, path.join(selectedDir, 'configs.json'));
+    assert.ok(fs.existsSync(createdPath), 'configs.json should be created');
+
+    const created = JSON.parse(fs.readFileSync(createdPath, 'utf8')) as Record<string, unknown>;
+    assert.strictEqual(created.sshPath, 'ssh');
+    assert.strictEqual(created.connectionReadyDelayMs, 1200);
+    assert.strictEqual(created.remoteHost, 'FOO_ADDRESS');
+    assert.strictEqual(created.remoteUser, 'FOO_USER');
+
+    const updatedConfigFile = vscode.workspace.getConfiguration('reverseProxy').get<string>('configFile', '');
+    assert.strictEqual(updatedConfigFile, createdPath);
   });
 
   test('start command should show error when ssh does not exist', async () => {

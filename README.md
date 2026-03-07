@@ -7,6 +7,7 @@ This extension starts/stops an SSH reverse proxy from VSCode.
 - `Reverse Proxy: Start`
 - `Reverse Proxy: Stop`
 - `Reverse Proxy: Show Status`
+- `Reverse Proxy: Settings`
 
 ## Default behavior
 
@@ -55,6 +56,7 @@ The Activity Bar has a `Proxy` icon. Open it to use a single toggle button:
 - `ReverseTun: ON` -> click to stop
 - `ReverseTun: CONNECTING...` -> transitional state while connecting
 - `Open Logs` -> open extension output logs
+- `Settings` -> open config file editor. If configured file is missing, select a directory and the extension creates `configs.json`, then updates `reverseProxy.configFile` to that path.
 
 If remote bind port is occupied, the extension reports a clear error (instead of only raw SSH warning logs).
 

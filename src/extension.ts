@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as os from 'os';
 import { ChildProcessWithoutNullStreams, spawn } from 'child_process';
 
 let sshProcess: ChildProcessWithoutNullStreams | null = null;
@@ -90,21 +91,24 @@ class ProxySidebarProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
     const logs = new vscode.TreeItem('Open Logs', vscode.TreeItemCollapsibleState.None);
     logs.iconPath = new vscode.ThemeIcon('output');
     logs.command = { command: 'reverseProxy.showLogs', title: 'Open Logs' };
+    const settings = new vscode.TreeItem('Settings', vscode.TreeItemCollapsibleState.None);
+    settings.iconPath = new vscode.ThemeIcon('gear');
+    settings.command = { command: 'reverseProxy.openSettings', title: 'Settings' };
 
     if (proxyState === 'connected') {
       toggle.iconPath = new vscode.ThemeIcon('circle-filled', new vscode.ThemeColor('charts.green'));
       toggle.command = { command: 'reverseProxy.sidebarToggle', title: 'Toggle Proxy' };
-      return [toggle, logs];
+      return [toggle, logs, settings];
     }
 
     if (proxyState === 'starting') {
       toggle.iconPath = new vscode.ThemeIcon('sync~spin');
-      return [toggle, logs];
+      return [toggle, logs, settings];
     }
 
     toggle.iconPath = new vscode.ThemeIcon('circle-large-outline', new vscode.ThemeColor('disabledForeground'));
     toggle.command = { command: 'reverseProxy.sidebarToggle', title: 'Toggle Proxy' };
-    return [toggle, logs];
+    return [toggle, logs, settings];
   }
 }
 
@@ -160,6 +164,19 @@ function resolveConfigPath(configFile: string): string {
   }
 
   return path.join(extensionContextRef.extensionPath, 'resources', 'reverse-proxy.config.json');
+}
+
+function resolveConfiguredConfigPath(configFile: string): string {
+  if (path.isAbsolute(configFile)) {
+    return configFile;
+  }
+
+  const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  if (workspaceFolder) {
+    return path.join(workspaceFolder, configFile);
+  }
+
+  return path.join(os.homedir(), configFile);
 }
 
 function loadFileProxyConfig(filePath: string): FileProxyConfig {
@@ -409,6 +426,63 @@ function showLogs(): void {
   outputChannel.show(true);
 }
 
+function getDefaultConfigJsonContent(): string {
+  return JSON.stringify(
+    {
+      sshPath: 'ssh',
+      connectionReadyDelayMs: 1200,
+      remoteHost: 'FOO_ADDRESS',
+      remotePort: 4001,
+      remoteUser: 'FOO_USER',
+      remoteBindPort: 17897,
+      localHost: '127.0.0.1',
+      localPort: 7897,
+      identityFile: ''
+    },
+    null,
+    2
+  );
+}
+
+async function openSettingsConfig(): Promise<void> {
+  const reverseProxyConfig = vscode.workspace.getConfiguration('reverseProxy');
+  const configuredPath = reverseProxyConfig.get<string>('configFile', 'reverse-proxy.config.json');
+  const currentPath = resolveConfiguredConfigPath(configuredPath);
+
+  let finalConfigPath = currentPath;
+
+  if (!fs.existsSync(currentPath)) {
+    const defaultUri = vscode.workspace.workspaceFolders?.[0]?.uri ?? vscode.Uri.file(os.homedir());
+    const selected = await vscode.window.showOpenDialog({
+      canSelectFiles: false,
+      canSelectFolders: true,
+      canSelectMany: false,
+      openLabel: 'Select',
+      defaultUri
+    });
+
+    if (!selected || selected.length === 0) {
+      return;
+    }
+
+    const selectedDir = selected[0].fsPath;
+    finalConfigPath = path.join(selectedDir, 'configs.json');
+
+    if (!fs.existsSync(finalConfigPath)) {
+      await vscode.workspace.fs.writeFile(
+        vscode.Uri.file(finalConfigPath),
+        Buffer.from(getDefaultConfigJsonContent(), 'utf8')
+      );
+    }
+
+    await reverseProxyConfig.update('configFile', finalConfigPath, vscode.ConfigurationTarget.Global);
+    void vscode.window.showInformationMessage(`Config file created: ${finalConfigPath}`);
+  }
+
+  const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(finalConfigPath));
+  await vscode.window.showTextDocument(doc, { preview: false });
+}
+
 export function activate(context: vscode.ExtensionContext): void {
   if (vscode.env.remoteName) {
     void vscode.window.showWarningMessage(
@@ -462,6 +536,12 @@ export function activate(context: vscode.ExtensionContext): void {
   );
 
   context.subscriptions.push(
+    vscode.commands.registerCommand('reverseProxy.openSettings', async () => {
+      await openSettingsConfig();
+    })
+  );
+
+  context.subscriptions.push(
     vscode.commands.registerCommand('reverseProxy.test.getSidebarItems', () => {
       if (!sidebarViewProvider) {
         return [];
@@ -480,6 +560,29 @@ export function activate(context: vscode.ExtensionContext): void {
         throw new Error(`Sidebar item '${label}' is not clickable.`);
       }
       await vscode.commands.executeCommand(item.command);
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('reverseProxy.test.openSettingsWithDirectory', async (dir: string) => {
+      const reverseProxyConfig = vscode.workspace.getConfiguration('reverseProxy');
+      const configuredPath = reverseProxyConfig.get<string>('configFile', 'reverse-proxy.config.json');
+      const currentPath = resolveConfiguredConfigPath(configuredPath);
+      if (fs.existsSync(currentPath)) {
+        throw new Error('Config path already exists; this test helper expects missing config path.');
+      }
+
+      const finalConfigPath = path.join(dir, 'configs.json');
+      if (!fs.existsSync(finalConfigPath)) {
+        await vscode.workspace.fs.writeFile(
+          vscode.Uri.file(finalConfigPath),
+          Buffer.from(getDefaultConfigJsonContent(), 'utf8')
+        );
+      }
+      await reverseProxyConfig.update('configFile', finalConfigPath, vscode.ConfigurationTarget.Global);
+      const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(finalConfigPath));
+      await vscode.window.showTextDocument(doc, { preview: false });
+      return finalConfigPath;
     })
   );
 }
