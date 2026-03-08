@@ -1,11 +1,13 @@
 {
-  "sshPath": "ssh",
-  "connectionReadyDelayMs": 1200,
-  "remoteHost": "FOO_ADDRESS",
-  "remotePort": 4001,
-  "remoteUser": "FOO_USER",
-  "remoteBindPort": 17897,
-  "localHost": "127.0.0.1",
-  "localPort": 7897,
-  "identityFile": ""
+  "ReverseTunnel": {
+    "sshPath": "ssh",
+    "connectionReadyDelayMs": 1200,
+    "remoteHost": "FOO_ADDRESS",
+    "remotePort": 4001,
+    "remoteUser": "FOO_USER",
+    "remoteBindPort": 17897,
+    "localHost": "127.0.0.1",
+    "localPort": 7897,
+    "identityFile": ""
+  }
 }

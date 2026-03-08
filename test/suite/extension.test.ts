@@ -24,15 +24,17 @@ suite('Reverse Proxy Extension Integration Tests', () => {
       testConfigFilePath,
       JSON.stringify(
         {
-          sshPath: options?.sshPath ?? 'ssh',
-          connectionReadyDelayMs: options?.connectionReadyDelayMs ?? 1200,
-          remoteHost: '10.99.0.1',
-          remotePort: 4001,
-          remoteUser: 'yangweijian',
-          remoteBindPort,
-          localHost: '127.0.0.1',
-          localPort: 7897,
-          identityFile: ''
+          ReverseTunnel: {
+            sshPath: options?.sshPath ?? 'ssh',
+            connectionReadyDelayMs: options?.connectionReadyDelayMs ?? 1200,
+            remoteHost: '10.99.0.1',
+            remotePort: 4001,
+            remoteUser: 'yangweijian',
+            remoteBindPort,
+            localHost: '127.0.0.1',
+            localPort: 7897,
+            identityFile: ''
+          }
         },
         null,
         2
@@ -104,17 +106,22 @@ suite('Reverse Proxy Extension Integration Tests', () => {
 
   test('sidebar should expose OFF toggle, Open Logs, and Settings when proxy is stopped', async () => {
     await vscode.commands.executeCommand('reverseProxy.stop');
-    const items = (await vscode.commands.executeCommand(
+    const tree = (await vscode.commands.executeCommand(
       'reverseProxy.test.getSidebarItems'
-    )) as Array<{ label: string; command?: string; enabled: boolean }>;
+    )) as {
+      root: Array<{ label: string; command?: string; enabled: boolean }>;
+      children: Array<{ label: string; command?: string; enabled: boolean }>;
+    };
 
-    assert.strictEqual(items.length, 3, `Expected three sidebar items, got ${items.length}`);
-    assert.strictEqual(items[0]?.label, 'ReverseTun: OFF');
-    assert.ok(items[0]?.enabled, 'OFF button should be clickable');
-    assert.strictEqual(items[1]?.label, 'Open Logs');
-    assert.ok(items[1]?.enabled, 'Open Logs should be clickable');
-    assert.strictEqual(items[2]?.label, 'Settings');
-    assert.ok(items[2]?.enabled, 'Settings should be clickable');
+    assert.strictEqual(tree.root.length, 1, `Expected one root group, got ${tree.root.length}`);
+    assert.strictEqual(tree.root[0]?.label, 'ReverseTunnel');
+    assert.strictEqual(tree.children.length, 3, `Expected three child items, got ${tree.children.length}`);
+    assert.strictEqual(tree.children[0]?.label, 'ReverseTun: OFF');
+    assert.ok(tree.children[0]?.enabled, 'OFF button should be clickable');
+    assert.strictEqual(tree.children[1]?.label, 'Open Logs');
+    assert.ok(tree.children[1]?.enabled, 'Open Logs should be clickable');
+    assert.strictEqual(tree.children[2]?.label, 'Settings');
+    assert.ok(tree.children[2]?.enabled, 'Settings should be clickable');
   });
 
   test('sidebar single toggle should switch OFF -> ON -> OFF end-to-end', async () => {
@@ -138,25 +145,31 @@ suite('Reverse Proxy Extension Integration Tests', () => {
         `Expected connected message after OFF click, got: ${infos.join(' | ')}`
       );
 
-      const itemsAfterStart = (await vscode.commands.executeCommand(
+      const treeAfterStart = (await vscode.commands.executeCommand(
         'reverseProxy.test.getSidebarItems'
-      )) as Array<{ label: string; command?: string; enabled: boolean }>;
-      assert.strictEqual(itemsAfterStart.length, 3);
-      assert.strictEqual(itemsAfterStart[0]?.label, 'ReverseTun: ON');
-      assert.ok(itemsAfterStart[0]?.enabled, 'ON button should be clickable');
-      assert.strictEqual(itemsAfterStart[1]?.label, 'Open Logs');
-      assert.strictEqual(itemsAfterStart[2]?.label, 'Settings');
+      )) as {
+        root: Array<{ label: string; command?: string; enabled: boolean }>;
+        children: Array<{ label: string; command?: string; enabled: boolean }>;
+      };
+      assert.strictEqual(treeAfterStart.children.length, 3);
+      assert.strictEqual(treeAfterStart.children[0]?.label, 'ReverseTun: ON');
+      assert.ok(treeAfterStart.children[0]?.enabled, 'ON button should be clickable');
+      assert.strictEqual(treeAfterStart.children[1]?.label, 'Open Logs');
+      assert.strictEqual(treeAfterStart.children[2]?.label, 'Settings');
 
       await vscode.commands.executeCommand('reverseProxy.test.clickSidebarItem', 'ReverseTun: ON');
       await new Promise((resolve) => setTimeout(resolve, 350));
-      const itemsAfterStop = (await vscode.commands.executeCommand(
+      const treeAfterStop = (await vscode.commands.executeCommand(
         'reverseProxy.test.getSidebarItems'
-      )) as Array<{ label: string; command?: string; enabled: boolean }>;
-      assert.strictEqual(itemsAfterStop.length, 3);
-      assert.strictEqual(itemsAfterStop[0]?.label, 'ReverseTun: OFF');
-      assert.ok(itemsAfterStop[0]?.enabled, 'OFF button should be clickable after stop');
-      assert.strictEqual(itemsAfterStop[1]?.label, 'Open Logs');
-      assert.strictEqual(itemsAfterStop[2]?.label, 'Settings');
+      )) as {
+        root: Array<{ label: string; command?: string; enabled: boolean }>;
+        children: Array<{ label: string; command?: string; enabled: boolean }>;
+      };
+      assert.strictEqual(treeAfterStop.children.length, 3);
+      assert.strictEqual(treeAfterStop.children[0]?.label, 'ReverseTun: OFF');
+      assert.ok(treeAfterStop.children[0]?.enabled, 'OFF button should be clickable after stop');
+      assert.strictEqual(treeAfterStop.children[1]?.label, 'Open Logs');
+      assert.strictEqual(treeAfterStop.children[2]?.label, 'Settings');
     } finally {
       win.showInformationMessage = originalShowInformationMessage;
       delete process.env.RPX_FAKE_MODE;
@@ -180,10 +193,12 @@ suite('Reverse Proxy Extension Integration Tests', () => {
     assert.ok(fs.existsSync(createdPath), 'configs.json should be created');
 
     const created = JSON.parse(fs.readFileSync(createdPath, 'utf8')) as Record<string, unknown>;
-    assert.strictEqual(created.sshPath, 'ssh');
-    assert.strictEqual(created.connectionReadyDelayMs, 1200);
-    assert.strictEqual(created.remoteHost, 'FOO_ADDRESS');
-    assert.strictEqual(created.remoteUser, 'FOO_USER');
+    const section = created.ReverseTunnel as Record<string, unknown>;
+    assert.ok(section, 'ReverseTunnel section should exist');
+    assert.strictEqual(section.sshPath, 'ssh');
+    assert.strictEqual(section.connectionReadyDelayMs, 1200);
+    assert.strictEqual(section.remoteHost, 'FOO_ADDRESS');
+    assert.strictEqual(section.remoteUser, 'FOO_USER');
 
     const updatedConfigFile = vscode.workspace.getConfiguration('reverseProxy').get<string>('configFile', '');
     assert.strictEqual(updatedConfigFile, createdPath);

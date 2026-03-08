@@ -1,71 +1,91 @@
-# Reverse Proxy VSCode Extension
+﻿# Reverse Proxy VSCode Extension
 
-This extension starts/stops an SSH reverse proxy from VSCode.
+在 VSCode 本地环境中管理 SSH 反向隧道（Reverse Tunnel）。
 
-## Commands
+## 主要功能
 
-- `Reverse Proxy: Start`
-- `Reverse Proxy: Stop`
-- `Reverse Proxy: Show Status`
-- `Reverse Proxy: Settings`
+- 在侧边栏 `ToolBox` -> `ReverseTunnel` 中一键开关隧道
+- 状态栏显示当前状态：`Stopped` / `Starting` / `Connected` / `Failed`
+- 内置日志入口（`Open Logs`）
+- 内置配置入口（`Settings`）
+- 启动前自动检查本机 `ssh` 命令可用性
+- 远端端口占用时给出明确错误提示
+- 仅在本地 VSCode UI 端运行（不在 VSCode Server 端运行）
 
-## Default behavior
+## 交互说明
 
-Start command runs SSH equivalent to:
+### 状态栏
 
-```bash
-ssh -N -R 17897:127.0.0.1:7897 FOO_USER@FOO_ADDRESS -p 4001
-```
+- 文本仅展示状态
+- 点击状态栏项会弹出当前状态（不执行 start/stop）
 
-## Settings
+### 侧边栏
 
-- `reverseProxy.configFile` (default: `reverse-proxy.config.json`)
+Activity Bar 图标：`ToolBox`  
+视图名称：`ToolBox Status`  
+分组节点：`ReverseTunnel`
 
-All runtime values are loaded from the JSON config file instead of extension settings.
+子项行为：
 
-Example `reverse-proxy.config.json`:
+- `ReverseTun: OFF`：点击后执行 `Start`
+- `ReverseTun: ON`：点击后执行 `Stop`
+- `ReverseTun: CONNECTING...`：连接中（不可点击）
+- `Open Logs`：打开扩展输出日志
+- `Settings`：打开/创建配置文件
+
+## 配置
+
+扩展设置只保留 1 项：
+
+- `reverseProxy.configFile`（默认：`reverse-proxy.config.json`）
+
+该设置指向 JSON 文件路径。若为相对路径，优先按工作区解析；若未命中，则回退到扩展内置 `resources/reverse-proxy.config.json`。
+
+运行参数位于配置文件的 `ReverseTunnel` 节点：
 
 ```json
 {
-  "sshPath": "ssh",
-  "connectionReadyDelayMs": 1200,
-  "remoteHost": "FOO_ADDRESS",
-  "remotePort": 4001,
-  "remoteUser": "FOO_USER",
-  "remoteBindPort": 17897,
-  "localHost": "127.0.0.1",
-  "localPort": 7897,
-  "identityFile": ""
+  "ReverseTunnel": {
+    "sshPath": "ssh",
+    "connectionReadyDelayMs": 1200,
+    "remoteHost": "FOO_ADDRESS",
+    "remotePort": 4001,
+    "remoteUser": "FOO_USER",
+    "remoteBindPort": 17897,
+    "localHost": "127.0.0.1",
+    "localPort": 7897,
+    "identityFile": ""
+  }
 }
 ```
 
-## SSH check
+等价 SSH 命令：
 
-Before starting the tunnel, the extension checks whether `ssh` is executable. If not, it shows an error and does not start.
+```bash
+ssh -N -p 4001 -R 17897:127.0.0.1:7897 FOO_USER@FOO_ADDRESS
+```
 
-The status bar now reports:
-- `Starting`
-- `Connected`
-- `Failed`
-- `Stopped`
+## Settings 按钮行为
 
-Click the status bar item to show current proxy status.
+当 `reverseProxy.configFile` 指向的文件不存在时：
 
-The Activity Bar has a `Proxy` icon. Open it to use a single toggle button:
-- `ReverseTun: OFF` -> click to start
-- `ReverseTun: ON` -> click to stop
-- `ReverseTun: CONNECTING...` -> transitional state while connecting
-- `Open Logs` -> open extension output logs
-- `Settings` -> open config file editor. If configured file is missing, select a directory and the extension creates `configs.json`, then updates `reverseProxy.configFile` to that path.
+1. 弹出目录选择框（默认打开工作区目录，无工作区时为用户主目录）
+2. 在所选目录创建 `configs.json`（带默认模板）
+3. 自动更新 `reverseProxy.configFile` 到新文件绝对路径
+4. 打开该文件供用户编辑
 
-If remote bind port is occupied, the extension reports a clear error (instead of only raw SSH warning logs).
-
-## Local development
+## 本地开发
 
 ```bash
 npm install
 npm run compile
+npm test
 ```
 
-Press `F5` in VSCode to launch Extension Development Host.
+按 `F5` 启动 Extension Development Host。
 
+## 打包 VSIX
+
+```bash
+npx vsce package --out release-artifacts/reverse-proxy-extension-0.0.1.vsix
+```

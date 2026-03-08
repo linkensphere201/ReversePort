@@ -45,6 +45,7 @@ function getStateLabel(state: ProxyState): string {
 }
 
 class ProxySidebarProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
+  private static readonly groupLabel = 'ReverseTunnel';
   private readonly onDidChangeTreeDataEmitter = new vscode.EventEmitter<void>();
   readonly onDidChangeTreeData = this.onDidChangeTreeDataEmitter.event;
 
@@ -57,15 +58,24 @@ class ProxySidebarProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
   }
 
   getChildren(element?: vscode.TreeItem): vscode.ProviderResult<vscode.TreeItem[]> {
-    if (element) {
+    if (!element) {
+      const group = new vscode.TreeItem(ProxySidebarProvider.groupLabel, vscode.TreeItemCollapsibleState.Expanded);
+      group.iconPath = new vscode.ThemeIcon('symbol-namespace');
+      return [group];
+    }
+
+    if (String(element.label) !== ProxySidebarProvider.groupLabel) {
       return [];
     }
 
     return this.buildItems();
   }
 
-  getItemsForTest(): Array<{ label: string; command?: string; enabled: boolean }> {
-    return this.buildItems().map((item) => {
+  getItemsForTest(): {
+    root: Array<{ label: string; command?: string; enabled: boolean }>;
+    children: Array<{ label: string; command?: string; enabled: boolean }>;
+  } {
+    const mapItem = (item: vscode.TreeItem) => {
       const command =
         item.command && typeof item.command === 'object' && 'command' in item.command
           ? item.command.command
@@ -75,7 +85,13 @@ class ProxySidebarProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
         command,
         enabled: Boolean(command)
       };
-    });
+    };
+
+    const root = [
+      new vscode.TreeItem(ProxySidebarProvider.groupLabel, vscode.TreeItemCollapsibleState.Expanded)
+    ].map((item) => mapItem(item));
+    const children = this.buildItems().map((item) => mapItem(item));
+    return { root, children };
   }
 
   private buildItems(): vscode.TreeItem[] {
@@ -196,22 +212,28 @@ function loadFileProxyConfig(filePath: string): FileProxyConfig {
     throw new Error(`Invalid config file '${filePath}': root must be a JSON object.`);
   }
 
-  const data = raw as Record<string, unknown>;
+  const root = raw as Record<string, unknown>;
+  const section = root.ReverseTunnel;
+  if (!section || typeof section !== 'object') {
+    throw new Error(`Invalid config file '${filePath}': missing object field 'ReverseTunnel'.`);
+  }
+
+  const data = section as Record<string, unknown>;
   const identityFile = typeof data.identityFile === 'string' ? data.identityFile.trim() : '';
-  const connectionReadyDelayMs = assertNumber(data.connectionReadyDelayMs, 'connectionReadyDelayMs');
+  const connectionReadyDelayMs = assertNumber(data.connectionReadyDelayMs, 'ReverseTunnel.connectionReadyDelayMs');
   if (connectionReadyDelayMs <= 0) {
-    throw new Error(`Invalid config field 'connectionReadyDelayMs': expected > 0.`);
+    throw new Error(`Invalid config field 'ReverseTunnel.connectionReadyDelayMs': expected > 0.`);
   }
 
   return {
-    sshPath: assertString(data.sshPath, 'sshPath'),
+    sshPath: assertString(data.sshPath, 'ReverseTunnel.sshPath'),
     connectionReadyDelayMs,
-    remoteHost: assertString(data.remoteHost, 'remoteHost'),
-    remotePort: assertNumber(data.remotePort, 'remotePort'),
-    remoteUser: assertString(data.remoteUser, 'remoteUser'),
-    remoteBindPort: assertNumber(data.remoteBindPort, 'remoteBindPort'),
-    localHost: assertString(data.localHost, 'localHost'),
-    localPort: assertNumber(data.localPort, 'localPort'),
+    remoteHost: assertString(data.remoteHost, 'ReverseTunnel.remoteHost'),
+    remotePort: assertNumber(data.remotePort, 'ReverseTunnel.remotePort'),
+    remoteUser: assertString(data.remoteUser, 'ReverseTunnel.remoteUser'),
+    remoteBindPort: assertNumber(data.remoteBindPort, 'ReverseTunnel.remoteBindPort'),
+    localHost: assertString(data.localHost, 'ReverseTunnel.localHost'),
+    localPort: assertNumber(data.localPort, 'ReverseTunnel.localPort'),
     identityFile
   };
 }
@@ -429,15 +451,17 @@ function showLogs(): void {
 function getDefaultConfigJsonContent(): string {
   return JSON.stringify(
     {
-      sshPath: 'ssh',
-      connectionReadyDelayMs: 1200,
-      remoteHost: 'FOO_ADDRESS',
-      remotePort: 4001,
-      remoteUser: 'FOO_USER',
-      remoteBindPort: 17897,
-      localHost: '127.0.0.1',
-      localPort: 7897,
-      identityFile: ''
+      ReverseTunnel: {
+        sshPath: 'ssh',
+        connectionReadyDelayMs: 1200,
+        remoteHost: 'FOO_ADDRESS',
+        remotePort: 4001,
+        remoteUser: 'FOO_USER',
+        remoteBindPort: 17897,
+        localHost: '127.0.0.1',
+        localPort: 7897,
+        identityFile: ''
+      }
     },
     null,
     2
@@ -555,7 +579,7 @@ export function activate(context: vscode.ExtensionContext): void {
       if (!sidebarViewProvider) {
         throw new Error('Sidebar provider is not initialized.');
       }
-      const item = sidebarViewProvider.getItemsForTest().find((x) => x.label === label);
+      const item = sidebarViewProvider.getItemsForTest().children.find((x) => x.label === label);
       if (!item || !item.command || !item.enabled) {
         throw new Error(`Sidebar item '${label}' is not clickable.`);
       }
