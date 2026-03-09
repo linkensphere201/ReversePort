@@ -1,4 +1,4 @@
-import * as assert from 'assert';
+﻿import * as assert from 'assert';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -102,6 +102,44 @@ suite('Reverse Proxy Extension Integration Tests', () => {
     };
     assert.ok(Array.isArray(manifest.extensionKind), 'extensionKind should be an array');
     assert.deepStrictEqual(manifest.extensionKind, ['ui']);
+  });
+
+  test('path resolution should use local home in remote mode and workspace in local mode', async () => {
+    const localWorkspace = path.join(testDir, 'workspace-local');
+    const localHome = path.join(testDir, 'home-local');
+    const fakeExtension = path.join(testDir, 'fake-extension');
+    fs.mkdirSync(localWorkspace, { recursive: true });
+    fs.mkdirSync(localHome, { recursive: true });
+    fs.mkdirSync(path.join(fakeExtension, 'resources'), { recursive: true });
+
+    const relativeConfigName = 'reverse-proxy.config.json';
+    const workspaceConfigPath = path.join(localWorkspace, relativeConfigName);
+    const homeConfigPath = path.join(localHome, relativeConfigName);
+    writeProxyConfig(29991);
+    fs.copyFileSync(testConfigFilePath, workspaceConfigPath);
+    fs.copyFileSync(testConfigFilePath, homeConfigPath);
+
+    const localResult = (await vscode.commands.executeCommand('reverseProxy.test.resolvePaths', {
+      configFile: relativeConfigName,
+      workspaceFolder: localWorkspace,
+      remoteName: '',
+      homeDir: localHome,
+      extensionPath: fakeExtension
+    })) as { loadPath: string; configuredPath: string };
+
+    assert.strictEqual(localResult.loadPath, workspaceConfigPath);
+    assert.strictEqual(localResult.configuredPath, workspaceConfigPath);
+
+    const remoteResult = (await vscode.commands.executeCommand('reverseProxy.test.resolvePaths', {
+      configFile: relativeConfigName,
+      workspaceFolder: localWorkspace,
+      remoteName: 'ssh-remote',
+      homeDir: localHome,
+      extensionPath: fakeExtension
+    })) as { loadPath: string; configuredPath: string };
+
+    assert.strictEqual(remoteResult.loadPath, homeConfigPath);
+    assert.strictEqual(remoteResult.configuredPath, homeConfigPath);
   });
 
   test('sidebar should expose OFF toggle, Open Logs, and Settings when proxy is stopped', async () => {
@@ -263,7 +301,7 @@ suite('Reverse Proxy Extension Integration Tests', () => {
 
     try {
       const brokenConfigPath = path.join(testDir, 'broken-config.json');
-      fs.writeFileSync(brokenConfigPath, '{\"remoteHost\": \"10.99.0.1\",', 'utf8');
+      fs.writeFileSync(brokenConfigPath, '{"remoteHost": "10.99.0.1",', 'utf8');
       await config.update('configFile', brokenConfigPath, vscode.ConfigurationTarget.Global);
       await vscode.commands.executeCommand('reverseProxy.start');
 

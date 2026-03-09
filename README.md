@@ -10,7 +10,7 @@
 - 内置配置入口（`Settings`）
 - 启动前自动检查本机 `ssh` 命令可用性
 - 远端端口占用时给出明确错误提示
-- 仅在本地 VSCode UI 端运行（不在 VSCode Server 端运行）
+- 支持在 remote-ssh 窗口中使用，SSH 进程始终在本地笔记本（UI Host）运行
 
 ## 交互说明
 
@@ -39,7 +39,7 @@ Activity Bar 图标：`ToolBox`
 
 - `reverseProxy.configFile`（默认：`reverse-proxy.config.json`）
 
-该设置指向 JSON 文件路径。若为相对路径，优先按工作区解析；若未命中，则回退到扩展内置 `resources/reverse-proxy.config.json`。
+该设置指向 JSON 文件路径。若为相对路径：本地窗口优先按工作区解析，remote-ssh 窗口按本地用户目录解析；若未命中，则回退到扩展内置 `resources/reverse-proxy.config.json`。
 
 运行参数位于配置文件的 `ReverseTunnel` 节点：
 
@@ -69,7 +69,7 @@ ssh -N -p 4001 -R 17897:127.0.0.1:7897 FOO_USER@FOO_ADDRESS
 
 当 `reverseProxy.configFile` 指向的文件不存在时：
 
-1. 弹出目录选择框（默认打开工作区目录，无工作区时为用户主目录）
+1. 弹出目录选择框（本地窗口默认工作区目录；remote-ssh 窗口默认本地用户主目录）
 2. 在所选目录创建 `configs.json`（带默认模板）
 3. 自动更新 `reverseProxy.configFile` 到新文件绝对路径
 4. 打开该文件供用户编辑
@@ -89,3 +89,4 @@ npm test
 ```bash
 npx vsce package --out release-artifacts/reverse-proxy-extension-0.0.1.vsix
 ```
+

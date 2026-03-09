@@ -1,4 +1,4 @@
-import * as vscode from 'vscode';
+﻿import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
@@ -29,6 +29,13 @@ type FileProxyConfig = {
 
 type RuntimeProxyConfig = FileProxyConfig & {
   loadedConfigPath: string;
+};
+
+type ResolvePathOptions = {
+  workspaceFolder?: string;
+  remoteName?: string;
+  homeDir?: string;
+  extensionPath?: string;
 };
 
 function getStateLabel(state: ProxyState): string {
@@ -162,37 +169,57 @@ function assertNumber(value: unknown, key: string): number {
   return value;
 }
 
-function resolveConfigPath(configFile: string): string {
+function resolveConfiguredConfigPathWithContext(configFile: string, options?: ResolvePathOptions): string {
   if (path.isAbsolute(configFile)) {
     return configFile;
   }
 
-  const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-  if (workspaceFolder) {
+  const workspaceFolder = options?.workspaceFolder ?? vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  const remoteName = options?.remoteName ?? vscode.env.remoteName;
+  const homeDir = options?.homeDir ?? os.homedir();
+
+  if (!remoteName && workspaceFolder) {
+    return path.join(workspaceFolder, configFile);
+  }
+
+  return path.join(homeDir, configFile);
+}
+
+function resolveConfigPathWithContext(configFile: string, options?: ResolvePathOptions): string {
+  if (path.isAbsolute(configFile)) {
+    return configFile;
+  }
+
+  const workspaceFolder = options?.workspaceFolder ?? vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  const remoteName = options?.remoteName ?? vscode.env.remoteName;
+  const homeDir = options?.homeDir ?? os.homedir();
+  const extensionPath = options?.extensionPath ?? extensionContextRef?.extensionPath;
+
+  if (!remoteName && workspaceFolder) {
     const workspacePath = path.join(workspaceFolder, configFile);
     if (fs.existsSync(workspacePath)) {
       return workspacePath;
     }
   }
 
-  if (!extensionContextRef) {
+  const homePath = path.join(homeDir, configFile);
+  if (fs.existsSync(homePath)) {
+    return homePath;
+  }
+
+  if (!extensionPath) {
     throw new Error('Extension context is not initialized.');
   }
 
-  return path.join(extensionContextRef.extensionPath, 'resources', 'reverse-proxy.config.json');
+  return path.join(extensionPath, 'resources', 'reverse-proxy.config.json');
+}
+
+function resolveConfigPath(configFile: string): string {
+  return resolveConfigPathWithContext(configFile);
 }
 
 function resolveConfiguredConfigPath(configFile: string): string {
-  if (path.isAbsolute(configFile)) {
-    return configFile;
-  }
-
-  const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-  if (workspaceFolder) {
-    return path.join(workspaceFolder, configFile);
-  }
-
-  return path.join(os.homedir(), configFile);
+  return resolveConfiguredConfigPathWithContext(configFile);
 }
 
 function loadFileProxyConfig(filePath: string): FileProxyConfig {
@@ -295,6 +322,9 @@ async function startProxy(): Promise<void> {
   const remoteTarget = `${config.remoteUser}@${config.remoteHost}`;
   const reverseSpec = `${config.remoteBindPort}:${config.localHost}:${config.localPort}`;
   outputChannel.appendLine(`[config] using file: ${config.loadedConfigPath}`);
+  if (vscode.env.remoteName) {
+    outputChannel.appendLine(`[mode] workspace is remote (${vscode.env.remoteName}), tunnel runs on local UI host.`);
+  }
   setProxyState('starting');
 
   try {
@@ -476,7 +506,11 @@ async function openSettingsConfig(): Promise<void> {
   let finalConfigPath = currentPath;
 
   if (!fs.existsSync(currentPath)) {
-    const defaultUri = vscode.workspace.workspaceFolders?.[0]?.uri ?? vscode.Uri.file(os.homedir());
+    const defaultUri =
+      !vscode.env.remoteName && vscode.workspace.workspaceFolders?.[0]?.uri
+        ? vscode.workspace.workspaceFolders[0].uri
+        : vscode.Uri.file(os.homedir());
+
     const selected = await vscode.window.showOpenDialog({
       canSelectFiles: false,
       canSelectFolders: true,
@@ -508,13 +542,6 @@ async function openSettingsConfig(): Promise<void> {
 }
 
 export function activate(context: vscode.ExtensionContext): void {
-  if (vscode.env.remoteName) {
-    void vscode.window.showWarningMessage(
-      `Reverse proxy extension only runs locally. Current remote: ${vscode.env.remoteName}`
-    );
-    return;
-  }
-
   extensionContextRef = context;
   outputChannel = vscode.window.createOutputChannel('Reverse Proxy');
   statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
@@ -522,6 +549,10 @@ export function activate(context: vscode.ExtensionContext): void {
   setProxyState('stopped');
   statusBarItem.show();
   sidebarViewProvider = new ProxySidebarProvider();
+
+  if (vscode.env.remoteName) {
+    outputChannel.appendLine(`[mode] remote workspace detected (${vscode.env.remoteName}); extension runs on local UI host.`);
+  }
 
   context.subscriptions.push(
     outputChannel,
@@ -571,6 +602,23 @@ export function activate(context: vscode.ExtensionContext): void {
         return [];
       }
       return sidebarViewProvider.getItemsForTest();
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('reverseProxy.test.resolvePaths', (args: ResolvePathOptions & { configFile: string }) => {
+      const configFile = args.configFile;
+      const options: ResolvePathOptions = {
+        workspaceFolder: args.workspaceFolder,
+        remoteName: args.remoteName,
+        homeDir: args.homeDir,
+        extensionPath: args.extensionPath
+      };
+
+      return {
+        loadPath: resolveConfigPathWithContext(configFile, options),
+        configuredPath: resolveConfiguredConfigPathWithContext(configFile, options)
+      };
     })
   );
 
